@@ -1,24 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "沉浸式翻译 (大模型自定义端点版)",
+  "name": "网页双语翻译助手",
   "version": "1.0.0",
   "description": "对接任意 OpenAI 兼容大模型端点 (v1/chat/completions) 的页面内联双语翻译插件，Chrome / Edge 通用。",
   "permissions": ["storage", "contextMenus", "commands", "scripting", "activeTab"],
-  "host_permissions": ["<all_urls>"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle",
-      "all_frames": true
-    }
-  ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "沉浸式翻译"
+    "default_title": "网页双语翻译助手"
   },
   "options_page": "options.html",
   "commands": {

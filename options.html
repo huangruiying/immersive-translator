@@ -5,8 +5,11 @@
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <h1>沉浸式翻译 · 设置</h1>
+  <h1>网页双语翻译助手 · 设置</h1>
   <p class="desc">对接任意 OpenAI 兼容的大模型接口（/v1/chat/completions）。配置在 Chrome 与 Edge 中通用。</p>
+  <div class="notice">
+    翻译时，扩展会把你主动翻译的网页文本或选中文本发送到你填写的接口地址。API Key 仅保存在本机浏览器，不会同步到浏览器账号。
+  </div>
 
   <label>接口地址 (Base URL)
     <input id="apiBase" type="text" placeholder="https://api.openai.com/v1">

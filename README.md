@@ -9,7 +9,7 @@
 沉浸式翻译类插件的核心思路，不在于「截屏 OCR」或「整页替换」，而是**在 DOM 层面做局部双语渲染**。整个过程分四步：
 
 ### 1. 内容脚本注入（Content Script）
-插件声明 `content_scripts.matches = ["<all_urls>"]`，浏览器在页面加载完成后（`run_at: document_idle`）自动把 `content.js` 注入到页面里。脚本运行在页面的 DOM 环境，但**和页面自身的 JS 隔离**（不能直接访问页面的全局变量，只能操作 DOM）。
+插件不在安装后自动注入所有网页。用户点击「翻译当前页面」、使用快捷键或右键菜单时，扩展通过 `activeTab + chrome.scripting.executeScript` 临时把 `content.js` 注入到当前标签页。脚本运行在页面的 DOM 环境，但**和页面自身的 JS 隔离**（不能直接访问页面的全局变量，只能操作 DOM）。
 
 ### 2. 文本节点抽取（DOM 遍历）
 `content.js` 用 `document.createTreeWalker(..., NodeFilter.SHOW_TEXT, ...)` 遍历整棵 DOM 树，只挑出**纯文本节点**，并过滤掉：
@@ -18,7 +18,7 @@
 - 空文本、纯标点/纯链接、隐藏元素。
 
 ### 3. 后台代理调用大模型（Background Service Worker）
-抽取出的文本被分批（每批约 12 段）通过 `chrome.runtime.sendMessage` 发给插件的**后台 service worker**。后台负责真正发 HTTP 请求：
+抽取出的文本被分批（每批约 12 段）通过 `chrome.runtime.sendMessage` 发给插件的**后台 service worker**。后台从本机存储读取接口配置和 API Key，并负责真正发 HTTP 请求：
 
 ```
 POST {接口地址}/v1/chat/completions
@@ -36,16 +36,16 @@ Content-Type: application/json
 ```
 
 > **为什么走后台而不是直接在页面里调？**
-> 1. **API Key 安全**：Key 只存在于后台/service worker 和 `chrome.storage`，不会暴露给页面 JS。
+> 1. **API Key 安全**：Key 只由后台/service worker 从 `chrome.storage.local` 读取，不会传给内容脚本或页面 JS。
 > 2. **CORS**：部分模型服务对浏览器跨域有限制，后台 `fetch` 更可控。
 > 3. **统一管理**：流式、重试、缓存、限流都集中在后台。
 
 ### 4. 译文内联写回（Inline Render）
 后台拿到译文后回传给 `content.js`，脚本为每个原文文本节点在其**紧邻位置插入一个译文节点**：
-- 父元素是块级（`<p>`、`<li>`、`<div>`…）→ 插入 `<div class="it-translation">译文</div>`，显示为原文下方带左边框的小灰字；
+- 父元素是块级（`<p>`、`<li>`、`<div>`…）→ 插入 `<div class="immersive-translator__translation">译文</div>`，显示为原文下方带左边框的小灰字；
 - 父元素是行内（`<span>`、`<a>`…）→ 插入 `<span> 译文</span>`。
 
-原文**保留不动**，形成「原文 + 译文」的沉浸式双语效果。点「还原」时，脚本删除所有 `.it-translation` 节点即可恢复原貌。
+原文**保留不动**，形成「原文 + 译文」的沉浸式双语效果。点「还原」时，脚本删除所有 `.immersive-translator__translation` 节点即可恢复原貌。
 
 ---
 
@@ -61,7 +61,9 @@ Content-Type: application/json
 | 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4` |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
 | **本地 Ollama** | `http://localhost:11434/v1` | `qwen2.5` |
-| **vLLM / 自建** | `http://你的服务器:8000/v1` | 你部署的模型名 |
+| **vLLM / 自建** | `https://你的服务器:8000/v1` | 你部署的模型名 |
+
+为满足 Chrome Web Store 的用户数据安全要求，远程接口必须使用 HTTPS；`http://localhost` 和 `http://127.0.0.1` 仅用于本机模型服务。
 
 > 你提到的「V1/V2 那种地址」指的就是 `/v1/chat/completions` 这一路径。只要你的服务暴露这个 OpenAI 兼容端点，把 Base URL 填到「接口地址」、模型名填到「模型名称」即可，**完全不用改代码**。
 
@@ -94,7 +96,17 @@ Content-Type: application/json
 
 ---
 
-## 五、文件结构
+## 五、隐私与权限说明
+
+- 扩展只在用户主动点击、快捷键或右键菜单触发翻译时注入当前页面，不常驻读取所有网页。
+- 翻译时会把待翻译的网页文本或选中文本发送到用户填写的接口地址。
+- API Key 和设置项保存在 `chrome.storage.local`，不会通过 Chrome Sync 同步。
+- 首次保存或测试接口时，浏览器会请求访问该接口域名的运行时权限。
+- 上架 Chrome Web Store 时，需要在开发者后台填写隐私政策 URL，可参考本仓库的 `PRIVACY.md`。
+
+---
+
+## 六、文件结构
 
 ```
 immersive-translator/
@@ -108,7 +120,7 @@ immersive-translator/
 
 ---
 
-## 六、可增强方向（当前为可用最小实现）
+## 七、可增强方向（当前为可用最小实现）
 
 - **流式输出**：用 SSE 边出边渲染，体验更接近官方沉浸式翻译。
 - **翻译缓存**：同一段文本按 hash 缓存，避免重复计费。
