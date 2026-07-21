@@ -8,6 +8,16 @@ body {
 }
 h1 { font-size: 20px; }
 .desc { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+.notice {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.6;
+}
 label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
 input, select, textarea {
   width: 100%;

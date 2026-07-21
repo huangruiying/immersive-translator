@@ -57,6 +57,6 @@ translateBtn.onclick = () => { statusEl.textContent = '翻译中…'; sendAction
 restoreBtn.onclick = () => { sendAction('restore'); };
 optionsLink.onclick = (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); };
 
-chrome.storage.sync.get(['apiKey'], (s) => {
+chrome.storage.local.get(['apiKey'], (s) => {
   if (!s.apiKey) statusEl.textContent = '未配置 API Key，请先打开设置';
 });

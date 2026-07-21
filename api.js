@@ -26,7 +26,7 @@ function buildMessages(texts, settings) {
 function parseTranslations(content, n) {
   const out = new Array(n).fill('');
   if (!content) return out;
-  const re = /\[\s*(\d+)\s*\]\s*([\s\S]*?)(?=\n\s*\[\s*\d+\s*\]|$)/g;
+  const re = /\[\s*(\d+)\s*\]\s*([\s\S]*?)(?=(?:\s*\[\s*\d+\s*\])|$)/g;
   let m;
   let count = 0;
   while ((m = re.exec(content)) !== null) {
@@ -45,6 +45,15 @@ async function callLLM(texts, settings) {
   const base = (settings.apiBase || '').replace(/\/+$/, '');
   if (!base) throw new Error('接口地址为空，请填写 Base URL');
   if (!settings.apiKey) throw new Error('API Key 为空，请填写后重试');
+  let parsedBase;
+  try {
+    parsedBase = new URL(base);
+  } catch (e) {
+    throw new Error('接口地址格式不正确，请填写完整的 Base URL');
+  }
+  if (parsedBase.protocol === 'http:' && !isLocalHost(parsedBase.hostname)) {
+    throw new Error('出于上架安全要求，远程接口必须使用 HTTPS；HTTP 仅允许 localhost/127.0.0.1 本地服务');
+  }
   const url = base + (/\/chat\/completions$/i.test(base) ? '' : '/chat/completions');
   const messages = buildMessages(texts, settings);
   const body = {
@@ -82,4 +91,8 @@ async function callLLM(texts, settings) {
     (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   if (!content) throw new Error('API 未返回译文（请检查模型名是否正确、返回结构是否符合 OpenAI 格式）');
   return parseTranslations(content, texts.length);
+}
+
+function isLocalHost(hostname) {
+  return /^(localhost|127\.0\.0\.1)$/i.test(hostname);
 }

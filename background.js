@@ -12,13 +12,22 @@ const DEFAULTS = {
 };
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(Object.keys(DEFAULTS), (s) => {
-    const toSet = {};
-    for (const k in DEFAULTS) if (s[k] === undefined) toSet[k] = DEFAULTS[k];
-    if (Object.keys(toSet).length) chrome.storage.sync.set(toSet);
+  const keys = Object.keys(DEFAULTS);
+  chrome.storage.local.get(keys, (localSettings) => {
+    chrome.storage.sync.get(keys, (syncSettings) => {
+      const toSet = {};
+      for (const k of keys) {
+        if (localSettings[k] !== undefined) continue;
+        toSet[k] = syncSettings[k] !== undefined ? syncSettings[k] : DEFAULTS[k];
+      }
+      if (Object.keys(toSet).length) chrome.storage.local.set(toSet);
+      chrome.storage.sync.remove(keys);
+    });
   });
-  chrome.contextMenus.create({ id: 'it-page', title: '翻译此页', contexts: ['page'] });
-  chrome.contextMenus.create({ id: 'it-sel', title: '翻译选中内容', contexts: ['selection'] });
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'it-page', title: '翻译此页', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'it-sel', title: '翻译选中内容', contexts: ['selection'] });
+  });
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -64,8 +73,9 @@ async function sendToTab(tabId, msg) {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || !msg.type) return;
   if (msg.type === 'TRANSLATE') {
-    // 正文翻译仍走后台：API Key 留在后台更安全，且不受页面 CORS 限制
-    callLLM(msg.texts, msg.settings)
+    // 正文翻译只接收文本；API Key 和端点配置始终由后台从本地存储读取。
+    getStoredSettings()
+      .then((settings) => callLLM(normalizeTexts(msg.texts), settings))
       .then((translations) => sendResponse({ translations }))
       .catch((err) => sendResponse({ error: String((err && err.message) || err) }));
     return true; // 保持通道打开以等待异步响应
@@ -75,3 +85,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 });
+
+function getStoredSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(Object.keys(DEFAULTS), (s) => {
+      resolve({ ...DEFAULTS, ...s });
+    });
+  });
+}
+
+function normalizeTexts(texts) {
+  if (!Array.isArray(texts)) return [];
+  return texts.map((t) => String(t || '').trim()).filter(Boolean);
+}
